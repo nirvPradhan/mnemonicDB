@@ -59,7 +59,7 @@ def get_sound_id(sound):
     sound_count = len(sound_fetch);
     
     if(sound_count < 1):
-        #print('Sound not found.')
+        print('Sound not found.')
         cursor.close()
         return -1
     
@@ -67,6 +67,19 @@ def get_sound_id(sound):
     cursor.close()
     #print(f'New sound created; id:{sound_id}.')
     return sound_id
+
+# Returns true or false
+def confirm():
+    print(f'{text_color.PROMPT}Confirm? Y/n{text_color.END}')
+    confirm = input(f'{text_color.INPUT}~:$ {text_color.END}')
+    
+    confirm = (confirm.strip()).lower()
+
+    if confirm == 'y':
+        return True
+    else:
+        return False
+
 
 # If sound exists return id, if sound DNE create and return id
 def add_sound(sound):
@@ -105,14 +118,14 @@ def add_mnemonic(sound, mnemonic, description):
 
 
 def add():
-    user_in = input(f'{text_color.INPUT}~:$ {text_color.END}')
+    user_in_1 = input(f'{text_color.INPUT}~:$ {text_color.END}')
     
-    if '-q' in user_in:
+    if '-q' in user_in_1:
             os.system('clear')
             help_prompt()
             return
     
-    split_in = user_in.split("|")
+    split_in = user_in_1.split("|")
     
     if len(split_in) < 3:
         print(f'{text_color.PROMPT}Not enough arguments for definition.{text_color.END}')
@@ -135,12 +148,7 @@ def add():
 
     print(f'{split_in[0]}\t|{split_in[1]}\t|{split_in[2]}\t') 
 
-    print(f'{text_color.PROMPT}Confirm? Y/n{text_color.END}')
-    confirm = input(f'{text_color.INPUT}~:$ {text_color.END}')
-    
-    confirm = (confirm.strip()).lower()
-
-    if confirm == 'y':
+    if confirm():
         pass
         # add the code to input an entry
 
@@ -150,10 +158,7 @@ def add():
         
         search(sound)
 
-        
-
-
-        input(f'{text_color.PROMPT}Press Enter to finish ADD:{text_color.END}')
+        input(f'{text_color.PROMPT}\nPress Enter to finish ADD:{text_color.END}')
         os.system('clear');
         help_prompt()
         return
@@ -162,6 +167,127 @@ def add():
         add_help_prompt()
         add()
         return
+
+# returns integer
+def select_item():
+    print(f'{text_color.PROMPT}Enter number of sound/mnemonic to edit:{text_color.END}')
+    user_in = input(f'{text_color.INPUT}~:$ {text_color.END}')
+
+    if user_in.isnumeric():
+        return int(user_in)
+    elif '-q' in user_in:
+        return
+
+# returns the sound_id, mnemonic_id of the selected mnemonic/sound
+def search_select(search):
+    search = (search.strip()).lower()
+    cursor = cnx.cursor()
+    # search for sound
+    cursor.execute(sound_search_query, [search])
+
+    sounds = cursor.fetchall()
+    sound_count = len(sounds)
+
+    cursor.close()
+    if sound_count < 1:
+        print(f'{text_color.OUTPUT}\"{sound}\" NOT found.{text_color.END}')
+        return
+
+    select_list = []
+    
+    print('')
+    for [sound_id, sound, timestamp] in sounds:
+        select_list.append([sound_id, None])
+        print(f'{text_color.TABLE}[{len(select_list)}]| {sound}\t|{text_color.END}')
+
+        mnemonic_cursor = cnx.cursor()
+        mnemonic_cursor.execute(mnemonic_search_query,[sound_id])
+        mnemonics = mnemonic_cursor.fetchall()
+        mnemonic_count = len(mnemonics)
+        for [mnemonic_id, sound_id, mnemonic, description, timestamp] in mnemonics:
+            select_list.append([sound_id, mnemonic_id])
+            print(f'{text_color.TABLE}[{len(select_list)}]\t\t| {mnemonic}\t| {description}{text_color.END}')
+
+        mnemonic_cursor.close()
+        print(f'{text_color.OUTPUT}\"{sound}\" found. It has {mnemonic_count} associated mnemonic(s).\n{text_color.END}')
+
+    while True:
+        selected = select_item()
+        if not selected: 
+            return
+        elif selected > 0 and selected <= len(select_list):
+            return select_list[selected-1]
+        else:
+            print(f'{text_color.OUTPUT}False argument.{text_color.END}')
+
+
+def edit_help_prompt():
+    os.system('clear');
+    print(f'{text_color.OUTPUT}EDIT MODE:{text_color.END}')
+    print(f'{text_color.OPTION}OPTIONS:\n\t-q (TO QUIT)\n\t-d [# NUMBER] (TO DELETE MNEMONIC WITH THAT NUMBER){text_color.END}')
+    print(f'{text_color.PROMPT}Enter sound or mnemonic to SEARCH, or OPTION:{text_color.END}')
+
+delete_mnemonic_prompt = ('DELETE FROM mnemonics WHERE sound_id = \'%s\' AND id = \'%s\';')
+
+# same as edit but continuing with previous prompt
+def edit_no_prompt(user_in):
+    selected = search_select(user_in)
+    if selected:
+        print(selected)
+        if selected[-1] == None:
+            print('sound was selected')
+        else:
+            cursor = cnx.cursor()
+            cursor.execute(delete_mnemonic_prompt, selected)
+            cursor.close()
+            print(f'{text_color.OUTPUT}Mnemonic Deleted.\n{text_color.END}')
+
+    if not selected:
+        os.system('clear');
+        help_prompt()
+    
+
+    print(f'{text_color.PROMPT}Enter -c to continue Editing {user_in} or Enter to return:{text_color.END}')
+    cont = input(f'{text_color.INPUT}~:$ {text_color.END}')
+    if '-c' in cont:
+        edit_no_prompt(user_in)
+    else:
+        os.system('clear');
+        help_prompt()
+
+# prompt search
+# list w/ numbers to select
+# confirm delete
+def edit():
+    edit_help_prompt()
+    user_in = input(f'{text_color.INPUT}~:$ {text_color.END}')
+    
+    selected = search_select(user_in)
+    if selected:
+        print(selected)
+        if selected[-1] == None:
+            print('sound was selected')
+        else:
+            cursor = cnx.cursor()
+            cursor.execute(delete_mnemonic_prompt, selected)
+            cursor.close()
+            print(f'{text_color.OUTPUT}Mnemonic Deleted.\n{text_color.END}')
+
+    if not selected:
+        os.system('clear');
+        help_prompt()
+    
+
+    print(f'{text_color.PROMPT}Enter -c to continue Editing {user_in} or Enter to return:{text_color.END}')
+    cont = input(f'{text_color.INPUT}~:$ {text_color.END}')
+    if '-c' in cont:
+        os.system('clear');
+        edit_no_prompt(user_in)
+    else:
+        os.system('clear');
+        help_prompt()
+
+
 
 def search(sound):
     cursor = cnx.cursor()
@@ -198,10 +324,8 @@ def search(sound):
 
 # commit loop
 def commit():
-    print('Commit changes? (Y/n)')
-    user_in = input(f'{text_color.INPUT}~:$ {text_color.END}')
-
-    if (user_in.strip()).lower() == 'y':
+    print(f'{text_color.PROMPT}Commit changes to Database?{text_color.END}')
+    if confirm():
         cnx.commit()
         print(f'{text_color.OUTPUT}Changes Commited.{text_color.END}')
 
@@ -211,20 +335,26 @@ def main():
     while(True):            
         user_in = input(f'{text_color.INPUT}~:$ {text_color.END}')
         if '-qq' in user_in:
+            os.system('clear')
             return
-        if '-q' in user_in:
-            commit()
+        elif '-q' in user_in:
+            commited = commit()
+            os.system('clear')
             return
-        if '-h' in user_in:
+        elif '-h' in user_in:
             help_prompt() 
-        if '-a' in user_in:
+        elif '-a' in user_in:
             os.system('clear');
             add_help_prompt()
             add()
-        if '-c' in user_in:
+            continue
+        elif '-e' in user_in:
+            edit()
+        elif '-c' in user_in:
             commit()
         else:
             search(user_in)
+        pass
 main()
 
 # how does this work:
